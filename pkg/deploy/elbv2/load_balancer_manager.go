@@ -97,10 +97,8 @@ func (m *defaultLoadBalancerManager) Update(ctx context.Context, resLB *elbv2mod
 	if err := m.updateSDKLoadBalancerWithTags(ctx, resLB, sdkLB); err != nil {
 		return elbv2model.LoadBalancerStatus{}, err
 	}
-	if !m.featureGates.Enabled(config.NLBSecurityGroupNoUpdate) {
-		if err := m.updateSDKLoadBalancerWithSecurityGroups(ctx, resLB, sdkLB); err != nil {
-			return elbv2model.LoadBalancerStatus{}, err
-		}
+	if err := m.updateSDKLoadBalancerWithSecurityGroups(ctx, resLB, sdkLB); err != nil {
+		return elbv2model.LoadBalancerStatus{}, err
 	}
 	if err := m.updateSDKLoadBalancerWithSubnetMappings(ctx, resLB, sdkLB); err != nil {
 		return elbv2model.LoadBalancerStatus{}, err
@@ -235,6 +233,13 @@ func (m *defaultLoadBalancerManager) updateSDKLoadBalancerWithSecurityGroups(ctx
 	}
 	desiredSecurityGroups := sets.NewString(securityGroups...)
 	currentSecurityGroups := sets.NewString(sdkLB.LoadBalancer.SecurityGroups...)
+
+	if !m.featureGates.Enabled(config.NLBSecurityGroupNoUpdate) {
+		if len(desiredSecurityGroups.List()) != 0 {
+			m.logger.Info("ingnored loadBalancer securityGroups change for feature NLBSecurityGroupNoUpdate")
+			return nil
+		}
+	}
 
 	isEnforceSGInboundRulesOnPrivateLinkUpdated, currentEnforceSecurityGroupInboundRulesOnPrivateLinkTraffic, desiredEnforceSecurityGroupInboundRulesOnPrivateLinkTraffic := isEnforceSGInboundRulesOnPrivateLinkUpdated(resLB, sdkLB)
 	if desiredSecurityGroups.Equal(currentSecurityGroups) && !isEnforceSGInboundRulesOnPrivateLinkUpdated {
